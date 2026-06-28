@@ -322,3 +322,33 @@ input[type="range"] {
 .dock-item:has(+ .dock-item:hover) {
   transform: scale(1.1) translateY(-4px);
 }
+
+/* ===== Mobile Optimizations ===== */
+@media (max-width: 768px) {
+  .tool-shell {
+    flex-direction: column;
+  }
+  .tool-sidebar {
+    width: 100%;
+    min-width: 100%;
+    height: 45vh;
+    border-right: none;
+    border-bottom: 4px solid var(--border);
+  }
+  .tool-stage {
+    height: 55vh;
+  }
+  .floating-dock {
+    padding: 8px 16px;
+    bottom: 16px;
+    gap: 12px;
+  }
+  .dock-item {
+    width: 40px;
+    height: 40px;
+  }
+  .dock-item svg {
+    width: 20px;
+    height: 20px;
+  }
+}
