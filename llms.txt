@@ -1,0 +1,23 @@
+# AKR.VID
+
+AKR.VID is a platform offering a collection of brutalist, high-performance web-based image and video manipulation tools created by Ajay Kumar Reddy. 
+
+## Features and Tools
+- **BabyTrack**: Blob-tracking video effect with customizable styles.
+- **ToneKit**: Retro halftone generator for vintage dot-matrix effects.
+- **TriggerWave**: Beat-synced visual effects that react to audio.
+- **ASCIIKit**: Converts images and video into ASCII art.
+- **Retroman**: Pixel dithering textures for retro noise.
+- **Glassify**: Glass-like light refraction and distortion effects.
+- **BlurSuite**: Advanced blur modes including radial, zoom, and wave.
+- **Super-G**: Digital glitch aesthetics generator.
+- **Scanline**: Analog CRT and VHS glitch effects.
+- **Scanline Pro**: Advanced CRT emulation with barrel distortion.
+- **ImageTrack**: Blob-tracking algorithms applied to static images.
+- **ReColor**: Color remapping via hue adjustments.
+- **Blocks**: Lego-like block mosaics from media.
+
+## Contact
+Email: ajaykumarreddykrishnareddygari@gmail.com
+LinkedIn: https://www.linkedin.com/in/ajay-kumar-reddy-krishnareddy-gari-a4885b282/
+GitHub: https://github.com/ajaykumarreddy-k
