@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Scanline Pro — ajay</title>
+<link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+
+<div class="tool-shell">
+  <aside class="tool-sidebar">
+    <div class="tool-logo">SCANLINE PRO</div>
+    <a class="tool-back" href="../index.html">&larr; All tools</a>
+
+    <input type="file" id="fileInput" accept="image/*,video/*" hidden />
+    <button class="btn primary" id="btnUpload">Upload Image / Video</button>
+    <button class="btn" id="btnCamera">Open Camera</button>
+    <button class="btn" id="btnExportPng">Export PNG</button>
+    <button class="btn hidden" id="btnExportWebm">Export WebM (5s)</button>
+
+    <div class="section-label">Preset</div>
+    <div id="ctrl-preset"></div>
+
+    <div class="section-label">Analog</div>
+    <div id="ctrl-intensity"></div>
+    <div id="ctrl-chroma"></div>
+    <div id="ctrl-trackingSpeed"></div>
+
+    <div class="section-label">Digital</div>
+    <div id="ctrl-blockCoverage"></div>
+    <div id="ctrl-blockSpeed"></div>
+
+    <div class="section-label">CRT</div>
+    <div id="ctrl-curvature"></div>
+    
+    <div class="section-label">Animation</div>
+    <div id="ctrl-animate"></div>
+  </aside>
+
+  <main class="tool-stage" id="stage">
+    <canvas id="canvas"></canvas>
+    <div class="drop-hint">Drop an image or video here, or click Upload</div>
+  </main>
+</div>
+
+<script src="../js/engine.js"></script>
+<script>
+  function pseudoRandom(a, b) {
+    const x = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453;
+    return x - Math.floor(x);
+  }
+
+  function applyPresets(preset, params) {
+    if (preset === 'Full') {
+      params.intensity = 50; params.chroma = 8; params.trackingSpeed = 20;
+      params.blockCoverage = 5; params.blockSpeed = 10; params.curvature = 30;
+    } else if (preset === 'Analog') {
+      params.intensity = 80; params.chroma = 15; params.trackingSpeed = 40;
+      params.blockCoverage = 0; params.blockSpeed = 0; params.curvature = 10;
+    } else if (preset === 'Digital') {
+      params.intensity = 10; params.chroma = 5; params.trackingSpeed = 0;
+      params.blockCoverage = 15; params.blockSpeed = 25; params.curvature = 0;
+    } else if (preset === 'Subtle') {
+      params.intensity = 15; params.chroma = 2; params.trackingSpeed = 5;
+      params.blockCoverage = 0; params.blockSpeed = 0; params.curvature = 5;
+    }
+  }
+
+  function render(ctx, src, w, h, p) {
+    const seed = p.animate === 'On' || tool.isVideo ? performance.now() * 0.05 : 1000;
+    
+    const tmp = document.createElement('canvas');
+    tmp.width = w; tmp.height = h;
+    const tctx = tmp.getContext('2d');
+    tctx.drawImage(src, 0, 0, w, h);
+
+    if (p.blockCoverage > 0) {
+      const blockSeed = Math.floor(seed * (p.blockSpeed / 100) * 0.1);
+      const numBlocks = Math.floor((p.blockCoverage / 100) * 30);
+      for (let i = 0; i < numBlocks; i++) {
+        const bx = pseudoRandom(i + 200, blockSeed) * w;
+        const by = pseudoRandom(i + 300, blockSeed) * h;
+        const bw = 8 + pseudoRandom(i + 400, blockSeed) * 50;
+        const bh = 3 + pseudoRandom(i + 500, blockSeed) * 14;
+        const shiftX = (pseudoRandom(i + 600, blockSeed) - 0.5) * 50;
+        tctx.drawImage(tmp, bx, by, bw, bh, bx + shiftX, by, bw, bh);
+      }
+    }
+
+    if (p.trackingSpeed > 0) {
+      const trackSeed = Math.floor(seed * (p.trackingSpeed / 100) * 0.5);
+      const bandY = pseudoRandom(1, trackSeed) * h;
+      const bandH = 6 + pseudoRandom(2, trackSeed) * 30;
+      const dx = (pseudoRandom(3, trackSeed) - 0.5) * (p.trackingSpeed * 2);
+      tctx.drawImage(tmp, 0, bandY, w, bandH, dx, bandY, w, bandH);
+    }
+
+    const srcData = tctx.getImageData(0, 0, w, h).data;
+    const outImg = ctx.createImageData(w, h);
+    const outData = outImg.data;
+    
+    const cx = w / 2;
+    const cy = h / 2;
+    const k = (p.curvature / 100) * 0.25; 
+    const chromaOffset = p.chroma; 
+    const intensity = p.intensity / 100;
+
+    for (let y = 0; y < h; y++) {
+      const ny = (y - cy) / cy; 
+      const ny2 = ny * ny;
+      const scanDarken = (y % 2 === 0) ? 1 : (1 - intensity * 0.5);
+      
+      for (let x = 0; x < w; x++) {
+        const nx = (x - cx) / cx;
+        const nx2 = nx * nx;
+        
+        const r2 = nx2 + ny2;
+        const f = 1 + k * r2 * r2; 
+        
+        const srcNx = nx * f;
+        const srcNy = ny * f;
+        
+        const sx = srcNx * cx + cx;
+        const sy = srcNy * cy + cy;
+        
+        const di = (y * w + x) * 4;
+        
+        if (sx >= 0 && sx < w && sy >= 0 && sy < h) {
+           const rX = Math.min(w - 1, Math.max(0, sx - chromaOffset * f));
+           const gX = sx;
+           const bX = Math.min(w - 1, Math.max(0, sx + chromaOffset * f));
+           
+           const sY = Math.floor(sy);
+           
+           const rI = (sY * w + Math.floor(rX)) * 4;
+           const gI = (sY * w + Math.floor(gX)) * 4;
+           const bI = (sY * w + Math.floor(bX)) * 4;
+           
+           const n = (pseudoRandom(di, seed) - 0.5) * (intensity * 150);
+           
+           outData[di] = srcData[rI] * scanDarken + n;
+           outData[di + 1] = srcData[gI + 1] * scanDarken + n;
+           outData[di + 2] = srcData[bI + 2] * scanDarken + n;
+           outData[di + 3] = 255;
+        } else {
+           outData[di + 3] = 255;
+        }
+      }
+    }
+    
+    ctx.putImageData(outImg, 0, 0);
+
+    if (intensity > 0) {
+      const grad = ctx.createRadialGradient(cx, cy, h * 0.4, cx, cy, h * Math.max(0.6, 1.1 - intensity));
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(1, `rgba(0,0,0,${intensity * 0.8})`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+    }
+  }
+
+  const tool = new ArtKit.ArtKitTool({ canvasId: 'canvas', onRender: render, params: {} });
+  const stage = document.getElementById('stage');
+  tool.bindUpload(document.getElementById('fileInput'), stage);
+
+  const wrapLoad = tool.loadFile.bind(tool);
+  tool.loadFile = (f) => { wrapLoad(f); stage.classList.add('has-source'); document.getElementById('btnExportWebm').classList.toggle('hidden', !f.type.startsWith('video/')); };
+
+  document.getElementById('btnUpload').onclick = () => document.getElementById('fileInput').click();
+  document.getElementById('btnCamera').onclick = () => tool.openCamera().then(() => stage.classList.add('has-source'));
+  document.getElementById('btnExportPng').onclick = () => tool.exportPNG('scanlinepro.png');
+  document.getElementById('btnExportWebm').onclick = () => tool.exportWebM('scanlinepro.webm', 5000);
+
+  function mountAll() {
+    document.getElementById('ctrl-preset').innerHTML = '';
+    document.getElementById('ctrl-intensity').innerHTML = '';
+    document.getElementById('ctrl-chroma').innerHTML = '';
+    document.getElementById('ctrl-trackingSpeed').innerHTML = '';
+    document.getElementById('ctrl-blockCoverage').innerHTML = '';
+    document.getElementById('ctrl-blockSpeed').innerHTML = '';
+    document.getElementById('ctrl-curvature').innerHTML = '';
+    document.getElementById('ctrl-animate').innerHTML = '';
+
+    ArtKit.mountChoice(document.getElementById('ctrl-preset'), {
+      key: 'preset', label: '', options: ['Custom', 'Full', 'Analog', 'Digital', 'Subtle'], value: tool.params.preset || 'Full',
+      params: tool.params, onChange: (v) => { applyPresets(v, tool.params); mountAll(); tool.refresh(); },
+    });
+    ArtKit.mountSlider(document.getElementById('ctrl-intensity'), {
+      key: 'intensity', label: 'Intensity', min: 0, max: 100, step: 1, value: tool.params.intensity ?? 50,
+      params: tool.params, onChange: () => { tool.params.preset = 'Custom'; tool.refresh(); },
+    });
+    ArtKit.mountSlider(document.getElementById('ctrl-chroma'), {
+      key: 'chroma', label: 'Chroma', min: 0, max: 20, step: 1, value: tool.params.chroma ?? 8,
+      params: tool.params, onChange: () => { tool.params.preset = 'Custom'; tool.refresh(); },
+    });
+    ArtKit.mountSlider(document.getElementById('ctrl-trackingSpeed'), {
+      key: 'trackingSpeed', label: 'Tracking Speed', min: 0, max: 100, step: 1, value: tool.params.trackingSpeed ?? 20,
+      params: tool.params, onChange: () => { tool.params.preset = 'Custom'; tool.refresh(); },
+    });
+    ArtKit.mountSlider(document.getElementById('ctrl-blockCoverage'), {
+      key: 'blockCoverage', label: 'Block Coverage', min: 0, max: 100, step: 1, value: tool.params.blockCoverage ?? 5,
+      params: tool.params, onChange: () => { tool.params.preset = 'Custom'; tool.refresh(); },
+    });
+    ArtKit.mountSlider(document.getElementById('ctrl-blockSpeed'), {
+      key: 'blockSpeed', label: 'Block Speed', min: 0, max: 100, step: 1, value: tool.params.blockSpeed ?? 10,
+      params: tool.params, onChange: () => { tool.params.preset = 'Custom'; tool.refresh(); },
+    });
+    ArtKit.mountSlider(document.getElementById('ctrl-curvature'), {
+      key: 'curvature', label: 'Curvature', min: 0, max: 100, step: 1, value: tool.params.curvature ?? 30,
+      params: tool.params, onChange: () => { tool.params.preset = 'Custom'; tool.refresh(); },
+    });
+    ArtKit.mountChoice(document.getElementById('ctrl-animate'), {
+      key: 'animate', label: 'Animate (stills)', options: ['Off', 'On'], value: tool.params.animate || 'Off',
+      params: tool.params,
+      onChange: (v) => {
+        if (tool.isVideo) return;
+        if (v === 'On') tool.startLoop(); else { tool.stopLoop(); tool.refresh(); }
+      },
+    });
+  }
+  
+  applyPresets('Full', tool.params);
+  tool.params.preset = 'Full';
+  mountAll();
+
+</script>
+  <!-- Floating Navigation Dock -->
+  <div class="floating-dock">
+    <a href="javascript:history.back()" class="dock-item" title="Back">
+      <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+    </a>
+    <a href="../index.html#hero" class="dock-item" title="Home">
+      <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+    </a>
+    <a href="https://github.com/ajaykumarreddy-k" class="dock-item" title="GitHub" target="_blank">
+      <svg viewBox="0 0 24 24"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.45-1.15-1.11-1.46-1.11-1.46-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2z"/></svg>
+    </a>
+    <a href="https://www.linkedin.com/in/ajay-kumar-reddy-krishnareddy-gari-a4885b282/" class="dock-item" title="LinkedIn" target="_blank">
+      <svg viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
+    </a>
+    <a href="mailto:ajaykumarreddykrishnareddygari@gmail.com" class="dock-item" title="Email">
+      <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+    </a>
+  </div>
+</body>
+</html>
