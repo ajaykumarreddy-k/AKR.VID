@@ -417,9 +417,61 @@
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "WebSite",
-    "name": "AKR.VID",
-    "url": "https://akrvid.vercel.app/"
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://akrvid.vercel.app/#organization",
+        "name": "AKR.VID",
+        "url": "https://akrvid.vercel.app/",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://akrvid.vercel.app/bg%20removed/mascot.png"
+        },
+        "sameAs": [
+          "https://github.com/ajaykumarreddy-k",
+          "https://www.linkedin.com/in/ajay-kumar-reddy-krishnareddy-gari-a4885b282/"
+        ]
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://akrvid.vercel.app/#website",
+        "url": "https://akrvid.vercel.app/",
+        "name": "AKR.VID",
+        "publisher": {
+          "@id": "https://akrvid.vercel.app/#organization"
+        }
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://akrvid.vercel.app/#faq",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What is AKR.VID and how does it work?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "AKR.VID is a premier collection of high-performance, web-based image and video manipulation tools. Inspired by brutalist design principles and modern digital aesthetics, our platform allows creators, developers, and artists to easily apply advanced CRT emulation, retro halftone patterns, and glitch effects directly in the browser."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Are the visual effects free to use for commercial projects?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes, all the tools provided within the AKR.VID ecosystem, including our popular ToneKit and BabyTrack filters, are currently available for open experimentation."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What technologies power the real-time video manipulation?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "The engine behind AKR.VID utilizes HTML5 Canvas, WebGL, and highly optimized JavaScript algorithms to process video and image frames in real-time."
+            }
+          }
+        ]
+      }
+    ]
   }
   </script>
 </head>
