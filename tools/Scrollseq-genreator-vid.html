@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scroll Sequence Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Product+Sans&display=swap" rel="stylesheet">
+<style>
+ :root{
+   --bg:#1a0dff; --card:#2413ff; --border:#4536ff; --text:#ffffff; --muted:#c7c2ff;
+   --accent:#ffffff; --accent2:#c7c2ff; --good:#3ddc97;
+ }
+ *{box-sizing:border-box}
+ body{
+   font-family:"Google Sans","Product Sans",-apple-system,system-ui,sans-serif;
+   font-size:15px;line-height:1.5;
+   max-width:640px;margin:0 auto;padding:56px 20px 80px;color:var(--text);
+   background:var(--bg);
+   min-height:100vh;
+ }
+ h2{font-size:26px;margin:0 0 6px;letter-spacing:-.02em}
+ h2 span{background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+ p.sub{color:var(--muted);margin:0 0 32px;font-size:14px}
+
+ .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px;box-shadow:0 20px 50px -20px rgba(0,0,0,.6)}
+
+ .drop{
+   border:1.5px dashed var(--border);border-radius:12px;padding:28px;text-align:center;
+   cursor:pointer;transition:.15s;position:relative;background:#101217;
+ }
+ .drop:hover{border-color:var(--accent);background:#12141b}
+ .drop.has-file{border-color:var(--good);border-style:solid}
+ .drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
+ .drop .icon{font-size:26px;margin-bottom:8px}
+ .drop .main{font-weight:600}
+ .drop .hint{color:var(--muted);font-size:12.5px;margin-top:4px}
+
+ label{display:flex;justify-content:space-between;margin:22px 0 8px;font-weight:600;font-size:13px;color:#d7d9de}
+ label .val{color:var(--accent);font-variant-numeric:tabular-nums;font-weight:700}
+
+ input[type=range]{
+   -webkit-appearance:none;width:100%;height:4px;border-radius:2px;
+   background:linear-gradient(90deg,var(--accent),var(--accent2));outline:none;
+ }
+ input[type=range]::-webkit-slider-thumb{
+   -webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+   background:#fff;border:3px solid var(--accent);cursor:pointer;margin-top:-6px;
+ }
+ input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid var(--accent);cursor:pointer}
+
+ .row{display:flex;gap:24px}
+ .row>div{flex:1}
+
+ button{
+   margin-top:28px;width:100%;padding:14px 18px;font-size:15px;font-weight:700;letter-spacing:.01em;
+   cursor:pointer;border:none;border-radius:10px;color:#0b0c0f;
+   background:linear-gradient(90deg,var(--accent),var(--accent2));
+   transition:transform .1s, opacity .15s;
+ }
+ button:hover{transform:translateY(-1px)}
+ button:disabled{opacity:.5;cursor:not-allowed;transform:none}
+
+ #bar{height:6px;background:#0e0f13;border:1px solid var(--border);border-radius:3px;overflow:hidden;margin-top:18px}
+ #bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--good));transition:width .12s}
+
+ #status{margin-top:12px;white-space:pre-line;font-size:12.5px;color:var(--muted);min-height:16px}
+ #status.err{color:#ff6b6b}
+
+ video{display:none}
+</style>
+</head>
+<body>
+<h2>Video → <span>Scroll-Driven</span> Frame Animation</h2>
+<p class="sub">Upload a video. It's converted client-side into a WebP frame sequence, packaged with a scroll-driven player into a zip. Nothing is uploaded anywhere.</p>
+
+<div class="card">
+  <div class="drop" id="drop">
+    <input type="file" id="file" accept="video/*">
+    <div class="icon">🎬</div>
+    <div class="main" id="dropMain">Click or drop a video file</div>
+    <div class="hint" id="dropHint">MP4, MOV, WebM…</div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>Max frames <span class="val" id="maxFramesV">120</span></label>
+      <input type="range" id="maxFrames" min="30" max="240" value="120">
+    </div>
+    <div>
+      <label>WebP quality <span class="val" id="qualityV">0.8</span></label>
+      <input type="range" id="quality" min="0.5" max="0.95" step="0.05" value="0.8">
+    </div>
+  </div>
+
+  <label>Max frame width (px) <span class="val" id="maxWidthV">1600</span></label>
+  <input type="range" id="maxWidth" min="640" max="2560" step="10" value="1600">
+
+  <button id="go">Generate zip</button>
+  <div id="bar"><i></i></div>
+  <div id="status"></div>
+</div>
+
+<video id="v" muted playsinline></video>
+<canvas id="c" style="display:none"></canvas>
+
+<script>
+const el = id => document.getElementById(id);
+['maxFrames','quality','maxWidth'].forEach(id=>{
+  el(id).addEventListener('input', ()=> el(id+'V').textContent = el(id).value);
+});
+
+function setStatus(s, isErr){ el('status').textContent = s; el('status').classList.toggle('err', !!isErr); }
+function setBar(p){ el('bar').firstElementChild.style.width = (p*100)+'%'; }
+
+el('file').addEventListener('change', ()=>{
+  const f = el('file').files[0];
+  if (f){
+    el('drop').classList.add('has-file');
+    el('dropMain').textContent = f.name;
+    el('dropHint').textContent = `${(f.size/1024/1024).toFixed(1)} MB — click to change`;
+  }
+});
+
+function seekTo(video, t){
+  return new Promise(res=>{
+    const onSeeked = ()=>{ video.removeEventListener('seeked', onSeeked); res(); };
+    video.addEventListener('seeked', onSeeked);
+    video.currentTime = t;
+  });
+}
+
+async function extractFrames(file, maxFrames, quality, maxWidth){
+  const video = el('v');
+  const canvas = el('c');
+  const ctx = canvas.getContext('2d');
+  const url = URL.createObjectURL(file);
+  video.src = url;
+  await new Promise(res=>{ video.onloadedmetadata = res; });
+
+  const duration = video.duration;
+  const srcW = video.videoWidth, srcH = video.videoHeight;
+  let w = srcW, h = srcH;
+  if (w > maxWidth){ h = Math.round(h * (maxWidth/w)); w = maxWidth; }
+  canvas.width = w; canvas.height = h;
+
+  const n = maxFrames;
+  const frames = [];
+  for (let i=0;i<n;i++){
+    const t = (i/(n-1)) * Math.max(0, duration - 0.05);
+    await seekTo(video, t);
+    ctx.drawImage(video, 0, 0, w, h);
+    const blob = await new Promise(res=> canvas.toBlob(res, 'image/webp', quality));
+    frames.push(blob);
+    setBar((i+1)/n);
+    setStatus(`Extracting frame ${i+1}/${n}`);
+  }
+  URL.revokeObjectURL(url);
+  return { frames, aspect: w/h };
+}
+
+function playerHtml(totalFrames, aspect){
+return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scroll Sequence</title>
+<style>
+ html,body{margin:0;height:400vh;background:#000}
+ .ss-wrap{position:relative;height:400vh}
+ .ss-sticky{position:sticky;top:0;height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden}
+ canvas{max-width:100%;max-height:100%}
+ .ss-loading{position:absolute;color:#fff;font:14px sans-serif}
+</style>
+</head>
+<body>
+<section class="ss-wrap" id="ss-wrap">
+  <div class="ss-sticky">
+    <div class="ss-loading" id="ss-loading">Loading…</div>
+    <canvas id="ss-canvas"></canvas>
+  </div>
+</section>
+<script>
+const TOTAL_FRAMES = ${totalFrames};
+const FRAME_PATH = i => \`frames/frame_\${String(i).padStart(4,'0')}.webp\`;
+const ASPECT = ${aspect.toFixed(4)};
+<\/script>
+<script src="script.js"><\/script>
+</body>
+</html>`;
+}
+
+const PLAYER_JS = `(function(){
+  const wrap = document.getElementById('ss-wrap');
+  const canvas = document.getElementById('ss-canvas');
+  const loading = document.getElementById('ss-loading');
+  const ctx = canvas.getContext('2d');
+  const cache = new Array(TOTAL_FRAMES).fill(null);
+  let currentFrame = -1, ready = false;
+
+  function dpr(){ return Math.min(window.devicePixelRatio||1, 2); }
+
+  function sizeCanvas(){
+    const vh = window.innerHeight, vw = window.innerWidth;
+    let w = vw, h = w/ASPECT;
+    if (h > vh){ h = vh; w = h*ASPECT; }
+    const r = dpr();
+    canvas.width = w*r; canvas.height = h*r;
+    canvas.style.width = w+'px'; canvas.style.height = h+'px';
+  }
+
+  function loadImg(i){
+    return new Promise(res=>{
+      if (cache[i]){ res(cache[i]); return; }
+      const img = new Image();
+      img.onload = ()=>{ cache[i]=img; res(img); };
+      img.onerror = ()=>res(null);
+      img.src = FRAME_PATH(i);
+    });
+  }
+
+  function draw(i){
+    const img = cache[i];
+    if (!img) return;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.drawImage(img,0,0,canvas.width,canvas.height);
+  }
+
+  async function preload(){
+    const first = Math.min(10, TOTAL_FRAMES);
+    for (let i=0;i<first;i++) await loadImg(i);
+    ready = true;
+    loading.style.display='none';
+    draw(0);
+    for (let i=first;i<TOTAL_FRAMES;i++) loadImg(i);
+  }
+
+  function progress(){
+    const rect = wrap.getBoundingClientRect();
+    const total = rect.height - window.innerHeight;
+    const scrolled = -rect.top;
+    return Math.min(1, Math.max(0, scrolled/total));
+  }
+
+  let ticking = false;
+  function onScroll(){
+    if (!ready || ticking) return;
+    ticking = true;
+    requestAnimationFrame(()=>{
+      const p = progress();
+      const idx = Math.round(p*(TOTAL_FRAMES-1));
+      if (idx !== currentFrame){
+        currentFrame = idx;
+        loadImg(idx).then(()=>draw(idx));
+      }
+      ticking = false;
+    });
+  }
+
+  window.addEventListener('resize', ()=>{ sizeCanvas(); draw(Math.max(0,currentFrame)); });
+  window.addEventListener('scroll', onScroll, {passive:true});
+  sizeCanvas();
+  preload();
+})();`;
+
+el('go').addEventListener('click', async ()=>{
+  const file = el('file').files[0];
+  if (!file){ setStatus('Choose a video file first.'); return; }
+  const maxFrames = parseInt(el('maxFrames').value);
+  const quality = parseFloat(el('quality').value);
+  const maxWidth = parseInt(el('maxWidth').value);
+
+  el('go').disabled = true;
+  try{
+    setStatus('Reading video…');
+    const { frames, aspect } = await extractFrames(file, maxFrames, quality, maxWidth);
+
+    setStatus('Building zip…');
+    const zip = new JSZip();
+    const framesFolder = zip.folder('frames');
+    frames.forEach((blob, i)=>{
+      framesFolder.file(`frame_${String(i+1).padStart(4,'0')}.webp`, blob);
+    });
+    zip.file('index.html', playerHtml(frames.length, aspect));
+    zip.file('script.js', PLAYER_JS);
+
+    const content = await zip.generateAsync({type:'blob'}, meta=>{
+      setBar(meta.percent/100);
+      setStatus(`Zipping… ${meta.percent.toFixed(0)}%`);
+    });
+
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(content);
+    a.download = 'scroll-sequence.zip';
+    a.click();
+    setStatus(`Done. ${frames.length} frames. Downloaded scroll-sequence.zip`);
+  } catch(err){
+    setStatus('Error: '+err.message, true);
+    console.error(err);
+  } finally {
+    el('go').disabled = false;
+  }
+});
+</script>
+</body>
+</html>
